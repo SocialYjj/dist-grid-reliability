@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>配电网可靠性评估台</title>
+<style>
+  :root{
+    --bg:#070c16; --bg2:#0a1220; --panel:#0d1729; --panel2:#101d33;
+    --line:#1b2c48; --line2:#24395c;
+    --text:#e8f0fb; --muted:#8ba1bf; --dim:#5f7695;
+    --accent:#38bdf8; --accent2:#22d3ee; --ok:#34d399; --warn:#fbbf24; --danger:#f87171;
+    --radius:12px;
+    --mono:"JetBrains Mono","Cascadia Mono",Consolas,ui-monospace,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:
+      radial-gradient(1100px 520px at 12% -10%, #12324f 0%, transparent 60%),
+      radial-gradient(900px 460px at 92% 0%, #102a44 0%, transparent 55%),
+      var(--bg);
+    color:var(--text);
+    font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+    font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased;
+    min-height:100vh; padding:0; overflow-x:hidden;
+  }
+  #viewport{width:100%;display:flex;justify-content:center;align-items:flex-start}
+  #stage{width:1440px;flex:none;padding:14px 18px 16px;transform-origin:top center}
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px}
+  .brand{display:flex;align-items:center;gap:12px}
+  .logo{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;
+    background:linear-gradient(145deg,#0ea5e9,#0e7490);box-shadow:0 6px 20px rgba(14,165,233,.32)}
+  .brand h1{font-size:19px;font-weight:650;letter-spacing:.4px}
+  .brand p{font-size:11.5px;color:var(--dim);letter-spacing:1.3px;text-transform:uppercase}
+  .topbar-right{display:flex;align-items:center;gap:10px}
+  .tag{font-size:11.5px;color:var(--muted);border:1px solid var(--line2);border-radius:999px;padding:5px 11px;background:rgba(20,35,58,.6)}
+  .tag b{color:var(--accent);font-weight:600}
+  .btn{border:1px solid var(--line2);background:var(--panel2);color:var(--text);border-radius:9px;
+    padding:8px 14px;font-size:12.5px;cursor:pointer;transition:.16s;font-family:inherit}
+  .btn:hover{border-color:var(--accent);color:#fff;background:#152943}
+  .btn.primary{background:linear-gradient(145deg,#0ea5e9,#0284c7);border-color:transparent;font-weight:600}
+  .btn.primary:hover{filter:brightness(1.1)}
+
+  .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px}
+  .kpi{background:linear-gradient(170deg,var(--panel2),var(--panel));border:1px solid var(--line);
+    border-radius:var(--radius);padding:10px 13px;position:relative;overflow:hidden}
+  .kpi::after{content:"";position:absolute;left:0;top:0;width:100%;height:2px;
+    background:linear-gradient(90deg,var(--accent),transparent)}
+  .kpi .k{font-size:11.5px;color:var(--muted);letter-spacing:.6px;display:flex;justify-content:space-between}
+  .kpi .k span{color:var(--dim);font-family:var(--mono);font-size:10.5px}
+  .kpi .v{font-family:var(--mono);font-size:23px;font-weight:600;letter-spacing:-.5px;margin-top:3px}
+  .kpi .u{font-size:11.5px;color:var(--dim);margin-left:5px;font-weight:400}
+  .kpi.good .v{color:var(--ok)} .kpi.warn .v{color:var(--warn)} .kpi.bad .v{color:var(--danger)}
+  .kpi .bar{height:4px;border-radius:2px;background:#16253c;margin-top:7px;overflow:hidden}
+  .kpi .bar i{display:block;height:100%;border-radius:2px;transition:width .35s ease}
+
+  .layout{display:grid;grid-template-columns:minmax(0,1fr) 372px;gap:12px;align-items:start}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+  .panel-h{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:8px 13px;border-bottom:1px solid var(--line);background:rgba(16,29,51,.55)}
+  .panel-h h2{font-size:13px;font-weight:600;letter-spacing:.3px;display:flex;align-items:center;gap:8px}
+  .panel-h h2::before{content:"";width:3px;height:13px;border-radius:2px;background:var(--accent)}
+  .panel-h .hint{font-size:11px;color:var(--dim)}
+  .panel-b{padding:10px 13px}
+
+  .diagram-wrap{padding:6px 8px 2px}
+  svg{width:100%;height:auto;display:block;user-select:none}
+  .hit{fill:transparent;cursor:pointer}
+  .seg{stroke:#2b4a72;stroke-width:3.5;stroke-linecap:round;transition:.15s}
+  .seg.on{stroke:var(--accent);stroke-width:5;filter:drop-shadow(0 0 7px rgba(56,189,248,.7))}
+  .node{fill:#0d1729;stroke:#37618f;stroke-width:2}
+  .node.on{stroke:var(--accent);fill:#102337}
+  .sw{fill:var(--accent2);opacity:.85}
+  .tx{fill:#c9d9ee}
+  .lbl{fill:#8ba1bf;font-size:11px;font-family:var(--mono)}
+  .lbl-b{fill:#dce9f8;font-size:11.5px;font-weight:600}
+  .lp-box{fill:#101d33;stroke:#27405f;stroke-width:1.2;transition:.15s;cursor:pointer}
+  .lp-box.on{stroke:var(--accent);fill:#132e45}
+  .lp-t{fill:#dce9f8;font-size:11.5px;font-weight:600;text-anchor:middle;pointer-events:none}
+  .lp-s{fill:#7d94b3;font-size:10px;text-anchor:middle;pointer-events:none;font-family:var(--mono)}
+  .tie{stroke:#3f5f8a;stroke-width:2;stroke-dasharray:5 5}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+  .list .row{display:grid;grid-template-columns:1fr 74px 66px 62px;gap:8px;align-items:center;
+    padding:6px 8px;border-radius:7px;font-size:12px;cursor:pointer;transition:.13s}
+  .list .row:hover{background:#132239}
+  .list .row.on{background:#132c45;box-shadow:inset 0 0 0 1px #2b5a83}
+  .list .head{color:var(--dim);font-size:10.5px;letter-spacing:.5px;cursor:default;padding-bottom:4px;
+    border-bottom:1px solid var(--line);border-radius:0}
+  .list .head:hover{background:none}
+  .list .nm{color:#d6e4f5;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dot{width:7px;height:7px;border-radius:2px;background:#3b6da3;flex:none}
+  .dot.t{background:#7c6cf0}
+  .num{font-family:var(--mono);text-align:right;color:#b9cbe2}
+  .num.hi{color:var(--warn)}
+
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{color:var(--dim);font-weight:500;font-size:10.5px;letter-spacing:.5px;text-align:right;padding:6px 8px;
+    border-bottom:1px solid var(--line)}
+  th:first-child{text-align:left}
+  td{padding:6px 8px;border-bottom:1px solid rgba(27,44,72,.55);text-align:right;font-family:var(--mono);color:#c3d5ea}
+  td:first-child{text-align:left;font-family:inherit;color:#dce9f8}
+  tbody tr:hover{background:#122134}
+  tr.tot td{border-bottom:none;color:#8ba1bf;font-weight:600}
+
+  .field{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:7px}
+  .field label{font-size:12px;color:var(--muted)}
+  .field label small{color:var(--dim);font-family:var(--mono);font-size:10px;margin-left:4px}
+  input[type=number]{width:96px;background:#0a1524;border:1px solid var(--line2);color:var(--text);
+    border-radius:7px;padding:6px 8px;font-family:var(--mono);font-size:12px;text-align:right;outline:none}
+  input[type=number]:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(56,189,248,.12)}
+  .sel-title{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;
+    background:#122c44;border:1px solid #2b5a83;margin-bottom:12px}
+  .sel-title .n{font-size:13px;font-weight:600}
+  .sel-title .k{margin-left:auto;font-size:10.5px;color:var(--accent);font-family:var(--mono);letter-spacing:.5px}
+  .switch-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;
+    border-top:1px dashed rgba(36,57,92,.7)}
+  .switch-row .t{font-size:12px;color:#cddcef}
+  .switch-row .t small{display:block;color:var(--dim);font-size:10.5px}
+  .tg{width:38px;height:20px;border-radius:999px;background:#1c2f4a;position:relative;cursor:pointer;
+    border:1px solid var(--line2);transition:.18s;flex:none}
+  .tg::after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;
+    background:#6d87a8;transition:.18s}
+  .tg.on{background:#0e7490;border-color:#22d3ee}
+  .tg.on::after{left:20px;background:#e6fbff}
+
+  .cmp-row{margin-bottom:11px}
+  .cmp-top{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-bottom:4px}
+  .cmp-top b{color:#dce9f8;font-weight:600}
+  .cmp-bar{height:9px;border-radius:5px;background:#16253c;overflow:hidden}
+  .cmp-bar i{display:block;height:100%;border-radius:5px;transition:width .4s ease}
+  .cmp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .cmp-card{background:#0b1626;border:1px solid var(--line);border-radius:9px;padding:9px 11px}
+  .cmp-card .cn{font-size:11.5px;color:var(--muted)}
+  .cmp-card .cv{font-family:var(--mono);font-size:19px;font-weight:600;margin:2px 0 6px}
+  .cmp-card .cd{font-size:10px;color:var(--dim);margin-top:5px;font-family:var(--mono)}
+  .cmp-note{font-size:10.5px;color:var(--dim);margin-top:8px;line-height:1.6}
+
+  .foot{margin-top:14px;display:flex;justify-content:space-between;color:var(--dim);font-size:11px;
+    border-top:1px solid var(--line);padding-top:10px}
+  .foot code{font-family:var(--mono);color:#7fa6cc}
+  .toast{position:fixed;right:22px;bottom:22px;background:#12314d;border:1px solid #2b5a83;color:#dbeaf9;
+    padding:10px 16px;border-radius:9px;font-size:12.5px;opacity:0;transform:translateY(8px);
+    transition:.25s;pointer-events:none}
+  .toast.show{opacity:1;transform:none}
+  @media (max-width:1180px){
+    .layout{grid-template-columns:1fr}
+    .kpis{grid-template-columns:repeat(3,1fr)}
+  }
+</style>
+</head>
+<body>
+<div id="viewport"><div id="stage">
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#eaf7ff" stroke-width="1.8"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 20V8h6l4-4h6v12h-6l-4 4H4z"/>
+      </svg>
+    </div>
+    <div>
+      <h1>配电网可靠性评估台</h1>
+      <p>Distribution Reliability Workbench · FMEA</p>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="tag">用户 <b id="tagUsers">—</b> 户</div>
+    <div class="tag">负荷 <b id="tagLoad">—</b> kW</div>
+    <button class="btn" id="btnReset">恢复默认参数</button>
+    <button class="btn primary" id="btnExport">导出评估结果</button>
+  </div>
+</header>
+
+<section class="kpis">
+  <div class="kpi" id="kpiSaifi">
+    <div class="k"><span class="k">系统平均停电频率</span><span>SAIFI</span></div>
+    <div class="v" id="vSaifi">—<span class="u">次/户·年</span></div>
+    <div class="bar"><i id="bSaifi"></i></div>
+  </div>
+  <div class="kpi" id="kpiSaidi">
+    <div class="k"><span class="k">系统平均停电时间</span><span>SAIDI</span></div>
+    <div class="v" id="vSaidi">—<span class="u">h/户·年</span></div>
+    <div class="bar"><i id="bSaidi"></i></div>
+  </div>
+  <div class="kpi" id="kpiCaidi">
+    <div class="k"><span class="k">平均每次停电时长</span><span>CAIDI</span></div>
+    <div class="v" id="vCaidi">—<span class="u">h/次</span></div>
+    <div class="bar"><i id="bCaidi"></i></div>
+  </div>
+  <div class="kpi" id="kpiAsai">
+    <div class="k"><span class="k">供电可用率</span><span>ASAI</span></div>
+    <div class="v" id="vAsai">—<span class="u">%</span></div>
+    <div class="bar"><i id="bAsai"></i></div>
+  </div>
+  <div class="kpi" id="kpiEns">
+    <div class="k"><span class="k">年缺供电量</span><span>ENS</span></div>
+    <div class="v" id="vEns">—<span class="u">MWh/年</span></div>
+    <div class="bar"><i id="bEns"></i></div>
+  </div>
+</section>
+
+<main class="layout">
+  <div>
+    <section class="panel">
+      <div class="panel-h">
+        <h2>10 kV 辐射状馈线拓扑</h2>
+        <div class="hint">点击线路段 / 配变 / 负荷点，可编辑其可靠性参数</div>
+      </div>
+      <div class="diagram-wrap">
+        <svg id="feeder" viewBox="0 0 1000 240" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <linearGradient id="busG" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#38bdf8"/><stop offset="100%" stop-color="#0e7490"/>
+            </linearGradient>
+          </defs>
+          <g id="gStatic"></g>
+          <g id="gDynamic"></g>
+        </svg>
+      </div>
+    </section>
+
+    <div class="grid2">
+      <section class="panel list">
+        <div class="panel-h"><h2>元件参数</h2><div class="hint">λ 次/年 · r 小时</div></div>
+        <div class="panel-b" id="compList"></div>
+      </section>
+      <section class="panel">
+        <div class="panel-h"><h2>负荷点明细</h2><div class="hint">逐点 FMEA 结果</div></div>
+        <div class="panel-b" style="padding:6px 10px 10px">
+          <table>
+            <thead>
+              <tr><th>负荷点</th><th>用户数</th><th>λ 次/年</th><th>U h/年</th><th>ENS MWh</th></tr>
+            </thead>
+            <tbody id="lpBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <section class="panel" style="margin-top:12px">
+      <div class="panel-h"><h2>方案对比</h2><div class="hint">SAIDI h/户·年 · 越低越好</div></div>
+      <div class="panel-b" id="cmpBody"></div>
+    </section>
+  </div>
+
+  <aside>
+    <section class="panel" style="margin-bottom:14px">
+      <div class="panel-h"><h2>参数编辑</h2><div class="hint" id="editHint">未选中</div></div>
+      <div class="panel-b" id="editBody">
+        <div class="cmp-note">在左侧拓扑或元件列表中点击任一元件，即可在此修改其故障率与修复时间，指标实时重算。</div>
+      </div>
+      <div class="panel-b" style="padding-top:0">
+        <div class="switch-row">
+          <div class="t">分段开关<small>故障隔离后恢复上游负荷</small></div>
+          <div class="tg on" id="tgSw"></div>
+        </div>
+        <div class="switch-row">
+          <div class="t">联络转供<small>下游负荷经邻馈线转供</small></div>
+          <div class="tg on" id="tgTie"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" style="margin-bottom:14px">
+      <div class="panel-h"><h2>薄弱环节排序</h2><div class="hint">对 SAIDI 的贡献</div></div>
+      <div class="panel-b" id="rankBody"></div>
+    </section>
+
+  </aside>
+</main>
+
+<div class="foot">
+  <div>评估方法：故障模式后果分析（FMEA）· 串联负荷点模型 · 分段隔离与联络转供修正</div>
+  <div>计算引擎 <code>vanilla-js</code> · 全离线运行</div>
+</div>
+</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  const NODE_X = [210, 410, 610, 810];
+  const BUS_X = 44;
+  const FEED_Y = 112;
+
+  const DEFAULTS = {
+    sections: [
+      { id:"S1", name:"L1 主干段", len:1.20, lam:0.080, r:3.5 },
+      { id:"S2", name:"L2 主干段", len:0.85, lam:0.080, r:3.5 },
+      { id:"S3", name:"L3 分支段", len:1.05, lam:0.080, r:3.5 },
+      { id:"S4", name:"L4 末端段", len:0.65, lam:0.080, r:3.5 }
+    ],
+    transformers: [
+      { id:"T1", name:"T1 配变", cap:400, lam:0.0150, r:6.0 },
+      { id:"T2", name:"T2 配变", cap:315, lam:0.0150, r:6.0 },
+      { id:"T3", name:"T3 配变", cap:250, lam:0.0150, r:6.0 },
+      { id:"T4", name:"T4 配变", cap:200, lam:0.0150, r:6.0 }
+    ],
+    lps: [
+      { id:"LP1", n:120, p:180 },
+      { id:"LP2", n:96,  p:145 },
+      { id:"LP3", n:74,  p:110 },
+      { id:"LP4", n:52,  p:78  }
+    ],
+    opts: { sectionalizer:true, tie:true, tIso:0.5, tTrans:1.0 }
+  };
+
+  const clone = o => JSON.parse(JSON.stringify(o));
+  let state = clone(DEFAULTS);
+  let sel = { kind:"section", idx:0 };
+
+  const fmt = (v,d) => (v===null||v===undefined||!isFinite(v)) ? "—" : v.toFixed(d===undefined?2:d);
+  const intFmt = v => Math.round(v).toLocaleString("en-US");
+
+  /* ---------- 计算引擎：FMEA ---------- */
+  function compute(s){
+    const LPs = s.lps.map(l => ({ id:l.id, n:l.n, p:l.p, lam:0, U:0, ens:0 }));
+    const contrib = [];               // 每个元件对每个负荷点的贡献
+    const opts = s.opts;
+
+    // 线路段：S_j 位于节点 j-1 与节点 j 之间（1-based j = 1..4）
+    s.sections.forEach((sec, si) => {
+      const j = si + 1;                       // 故障段序号
+      const lam = sec.lam * sec.len;          // 次/年
+      LPs.forEach((lp, k) => {
+        const pos = k + 1;                    // 负荷点所在节点序号
+        let d, mode;
+        if (pos < j){
+          d = opts.sectionalizer ? opts.tIso : sec.r;  mode = opts.sectionalizer ? "隔离" : "修复";
+        } else if (pos === j){
+          d = sec.r; mode = "位于故障段";
+        } else {
+          d = opts.tie ? opts.tTrans : sec.r;  mode = opts.tie ? "转供" : "修复";
+        }
+        lp.lam += lam; lp.U += lam * d;
+        contrib.push({ comp:sec.id, lp:lp.id, lam, d, mode });
+      });
+    });
+
+    // 配变：故障由熔断器就地隔离，仅影响自身负荷点
+    s.transformers.forEach((tr, ti) => {
+      const lp = LPs[ti];
+      lp.lam += tr.lam; lp.U += tr.lam * tr.r;
+      contrib.push({ comp:tr.id, lp:lp.id, lam:tr.lam, d:tr.r, mode:"本身故障" });
+    });
+
+    LPs.forEach(lp => { lp.ens = lp.p * lp.U / 1000; });   // kW·h → MWh
+
+    const sumN = LPs.reduce((a,l)=>a+l.n,0);
+    const sumP = LPs.reduce((a,l)=>a+l.p,0);
+    const saifi = LPs.reduce((a,l)=>a+l.lam*l.n,0)/sumN;
+    const saidi = LPs.reduce((a,l)=>a+l.U*l.n,0)/sumN;
+    const caidi = saifi>1e-12 ? saidi/saifi : 0;
+    const asai  = 1 - saidi/8760;
+    const ens   = LPs.reduce((a,l)=>a+l.ens,0);
+
+    // 元件对 SAIDI 的贡献
+    const byComp = {};
+    contrib.forEach(c => {
+      const lp = LPs.find(x=>x.id===c.lp);
+      byComp[c.comp] = (byComp[c.comp]||0) + c.lam*c.d*lp.n/sumN;
+    });
+
+    return { LPs, saifi, saidi, caidi, asai, ens, sumN, sumP, byComp };
+  }
+
+  /* ---------- SVG 渲染 ---------- */
+  function renderDiagram(res){
+    const g = document.getElementById("gDynamic");
+    let h = "";
+
+    // 母线
+    h += `<rect x="30" y="${FEED_Y-28}" width="9" height="56" rx="4" fill="url(#busG)"/>`;
+    h += `<text x="16" y="${FEED_Y-38}" class="lbl-b" font-size="11">10 kV 母线</text>`;
+    h += `<line x1="39" y1="${FEED_Y}" x2="${NODE_X[0]}" y2="${FEED_Y}" stroke="#2b4a72" stroke-width="3.5"/>`;
+
+    // 线路段
+    state.sections.forEach((sec, i) => {
+      const x1 = i===0 ? 39 : NODE_X[i-1];
+      const x2 = NODE_X[i];
+      const on = (sel.kind==="section" && sel.idx===i);
+      h += `<line x1="${x1}" y1="${FEED_Y}" x2="${x2}" y2="${FEED_Y}" class="seg ${on?"on":""}"/>`;
+      h += `<line x1="${x1}" y1="${FEED_Y}" x2="${x2}" y2="${FEED_Y}" class="hit" stroke-width="18"
+              data-kind="section" data-idx="${i}"/>`;
+      h += `<text x="${(x1+x2)/2}" y="${FEED_Y-10}" class="lbl" text-anchor="middle"
+              font-size="11">${sec.id} ${sec.len.toFixed(2)}km · λ${(sec.lam*sec.len).toFixed(3)}</text>`;
+    });
+
+    // 节点 + 配变 + 负荷点
+    NODE_X.forEach((x, i) => {
+      const lp = state.lps[i];
+      const tr = state.transformers[i];
+      const onNode = (sel.kind==="lp" && sel.idx===i);
+      const onTr = (sel.kind==="tx" && sel.idx===i);
+
+      if (state.opts.sectionalizer && i>0){
+        h += `<rect x="${x-18}" y="${FEED_Y-5}" width="9" height="9" rx="1.5" class="sw"/>`;
+      }
+
+      h += `<circle cx="${x}" cy="${FEED_Y}" r="5.5" class="node ${onNode?"on":""}"/>`;
+
+      // 配变符号
+      h += `<line x1="${x}" y1="${FEED_Y}" x2="${x}" y2="${FEED_Y+20}" stroke="#37618f" stroke-width="2"/>`;
+      h += `<circle cx="${x}" cy="${FEED_Y+27}" r="7" fill="none" stroke="${onTr?"#38bdf8":"#c9d9ee"}" stroke-width="2"/>`;
+      h += `<circle cx="${x}" cy="${FEED_Y+36}" r="7" fill="none" stroke="${onTr?"#38bdf8":"#c9d9ee"}" stroke-width="2"/>`;
+      h += `<circle cx="${x}" cy="${FEED_Y+32}" r="15" class="hit" data-kind="tx" data-idx="${i}"/>`;
+      h += `<text x="${x+16}" y="${FEED_Y+27}" class="lbl" font-size="10">${tr.id} ${tr.cap}kVA</text>`;
+      h += `<line x1="${x}" y1="${FEED_Y+43}" x2="${x}" y2="${FEED_Y+53}" stroke="#37618f" stroke-width="2"/>`;
+
+      // 负荷点盒
+      const bx = x-55, by = FEED_Y+53;
+      h += `<rect x="${bx}" y="${by}" width="110" height="46" rx="8" class="lp-box ${onNode?"on":""}"
+              data-kind="lp" data-idx="${i}"/>`;
+      h += `<text x="${x}" y="${by+20}" class="lp-t">${lp.id}</text>`;
+      h += `<text x="${x}" y="${by+36}" class="lp-s">${lp.n} 户 · ${lp.p} kW</text>`;
+    });
+
+    // 联络开关
+    const lastX = NODE_X[NODE_X.length-1];
+    const tieOn = state.opts.tie;
+    h += `<line x1="${lastX}" y1="${FEED_Y}" x2="902" y2="${FEED_Y}" class="tie"
+            stroke="${tieOn?"#22d3ee":"#3f5f8a"}" opacity="${tieOn?0.95:0.45}"/>`;
+    h += `<rect x="890" y="${FEED_Y-6}" width="12" height="12" rx="2"
+            fill="${tieOn?"#22d3ee":"none"}" stroke="${tieOn?"#22d3ee":"#3f5f8a"}" stroke-width="2" opacity=".9"/>`;
+    h += `<text x="884" y="${FEED_Y-40}" class="lbl-b" font-size="10.5"
+            fill="${tieOn?"#22d3ee":"#5f7695"}">联络开关</text>`;
+    h += `<rect x="918" y="${FEED_Y-18}" width="78" height="50" rx="7" fill="#101d33" stroke="#24395c"/>`;
+    h += `<text x="957" y="${FEED_Y+2}" class="lbl" text-anchor="middle" font-size="10">邻馈线</text>`;
+    h += `<text x="957" y="${FEED_Y+18}" class="lbl" text-anchor="middle" font-size="10">备用电源</text>`;
+
+    // 运行方式
+    h += `<text x="16" y="${FEED_Y+112}" class="lbl" font-size="10.5" fill="#5f7695">
+            运行方式：分段开关${state.opts.sectionalizer?"投入":"退出"} · 联络转供${state.opts.tie?"投入":"退出"} ·
+            故障隔离 ${state.opts.tIso.toFixed(1)} h · 转供操作 ${state.opts.tTrans.toFixed(1)} h</text>`;
+
+    g.innerHTML = h;
+
+    g.querySelectorAll("[data-kind]").forEach(el => {
+      el.addEventListener("click", () => {
+        const kind = el.getAttribute("data-kind");
+        const idx = parseInt(el.getAttribute("data-idx"), 10);
+        sel = { kind, idx };
+        render();
+      });
+    });
+  }
+
+  /* ---------- 参数面板 ---------- */
+  function renderEditor(){
+    const body = document.getElementById("editBody");
+    const hint = document.getElementById("editHint");
+    let html = "";
+
+    if (sel.kind === "section"){
+      const s = state.sections[sel.idx];
+      hint.textContent = s.id;
+      html = `
+        <div class="sel-title"><div class="dot"></div><div class="n">${s.name}</div><div class="k">线路段</div></div>
+        <div class="field"><label>线路长度 <small>km</small></label>
+          <input type="number" step="0.05" min="0.05" value="${s.len}" data-f="len" data-k="section"></div>
+        <div class="field"><label>单位故障率 <small>次/(年·km)</small></label>
+          <input type="number" step="0.005" min="0" value="${s.lam}" data-f="lam" data-k="section"></div>
+        <div class="field"><label>修复时间 <small>h</small></label>
+          <input type="number" step="0.5" min="0.1" value="${s.r}" data-f="r" data-k="section"></div>
+        <div class="cmp-note">本段等效故障率 = 长度 × 单位故障率 =
+          <b style="color:#38bdf8">${(s.len*s.lam).toFixed(3)}</b> 次/年</div>`;
+    } else if (sel.kind === "tx"){
+      const t = state.transformers[sel.idx];
+      hint.textContent = t.id;
+      html = `
+        <div class="sel-title"><div class="dot t"></div><div class="n">${t.name}</div><div class="k">配电变压器</div></div>
+        <div class="field"><label>额定容量 <small>kVA</small></label>
+          <input type="number" step="10" min="50" value="${t.cap}" data-f="cap" data-k="tx"></div>
+        <div class="field"><label>故障率 <small>次/年</small></label>
+          <input type="number" step="0.001" min="0" value="${t.lam}" data-f="lam" data-k="tx"></div>
+        <div class="field"><label>修复时间 <small>h</small></label>
+          <input type="number" step="0.5" min="0.1" value="${t.r}" data-f="r" data-k="tx"></div>
+        <div class="cmp-note">配变故障由高压熔断器就地隔离，仅影响本负荷点，不中断上游用户。</div>`;
+    } else {
+      const lp = state.lps[sel.idx];
+      hint.textContent = lp.id;
+      html = `
+        <div class="sel-title"><div class="dot"></div><div class="n">${lp.id} 负荷点</div><div class="k">用户侧</div></div>
+        <div class="field"><label>用户数 <small>户</small></label>
+          <input type="number" step="1" min="1" value="${lp.n}" data-f="n" data-k="lp"></div>
+        <div class="field"><label>平均负荷 <small>kW</small></label>
+          <input type="number" step="1" min="1" value="${lp.p}" data-f="p" data-k="lp"></div>
+        <div class="cmp-note">用户数与平均负荷决定该点在系统指标中的权重，以及年缺供电量 ENS。</div>`;
+    }
+    body.innerHTML = html;
+
+    body.querySelectorAll("input[data-f]").forEach(inp => {
+      inp.addEventListener("input", () => {
+        const f = inp.getAttribute("data-f");
+        const k = inp.getAttribute("data-k");
+        const v = parseFloat(inp.value);
+        if (!isFinite(v)) return;
+        const target = k==="section" ? state.sections[sel.idx]
+                     : k==="tx" ? state.transformers[sel.idx]
+                     : state.lps[sel.idx];
+        target[f] = Math.max(0, v);
+        render();
+        const again = document.querySelector(`input[data-f="${f}"]`);
+        if (again && document.activeElement !== again){ /* keep focus */ }
+      });
+    });
+  }
+
+  /* ---------- 列表 ---------- */
+  function renderLists(res){
+    const wrap = document.getElementById("compList");
+    let h = `<div class="row head"><div>元件</div><div class="num">λ 次/年</div><div class="num">r h</div><div class="num">贡献</div></div>`;
+    state.sections.forEach((s,i)=>{
+      const on = sel.kind==="section" && sel.idx===i;
+      h += `<div class="row ${on?"on":""}" data-kind="section" data-idx="${i}">
+        <div class="nm"><span class="dot"></span>${s.id} ${s.len.toFixed(2)}km</div>
+        <div class="num">${(s.lam*s.len).toFixed(3)}</div>
+        <div class="num">${s.r.toFixed(1)}</div>
+        <div class="num">${(res.byComp[s.id]||0).toFixed(2)}</div></div>`;
+    });
+    state.transformers.forEach((t,i)=>{
+      const on = sel.kind==="tx" && sel.idx===i;
+      h += `<div class="row ${on?"on":""}" data-kind="tx" data-idx="${i}">
+        <div class="nm"><span class="dot t"></span>${t.id} ${t.cap}kVA</div>
+        <div class="num">${t.lam.toFixed(3)}</div>
+        <div class="num">${t.r.toFixed(1)}</div>
+        <div class="num">${(res.byComp[t.id]||0).toFixed(2)}</div></div>`;
+    });
+    wrap.innerHTML = h;
+    wrap.querySelectorAll(".row[data-kind]").forEach(el=>{
+      el.addEventListener("click", ()=>{
+        sel = { kind: el.getAttribute("data-kind"), idx: parseInt(el.getAttribute("data-idx"),10) };
+        render();
+      });
+    });
+
+    const tb = document.getElementById("lpBody");
+    let rows = "";
+    res.LPs.forEach(l=>{
+      rows += `<tr><td>${l.id}</td><td>${intFmt(l.n)}</td><td>${l.lam.toFixed(3)}</td>
+               <td>${l.U.toFixed(2)}</td><td>${l.ens.toFixed(2)}</td></tr>`;
+    });
+    rows += `<tr class="tot"><td>合计</td><td>${intFmt(res.sumN)}</td><td>—</td><td>—</td>
+             <td>${res.ens.toFixed(2)}</td></tr>`;
+    tb.innerHTML = rows;
+  }
+
+  /* ---------- 排序与对比 ---------- */
+  function renderRank(res){
+    const items = Object.keys(res.byComp).map(k=>({ k, v: res.byComp[k] }))
+      .sort((a,b)=>b.v-a.v).slice(0,4);
+    const max = items[0] ? items[0].v : 1;
+    let h = "";
+    items.forEach((it,i)=>{
+      const pct = Math.max(2, it.v/max*100);
+      h += `<div class="cmp-row">
+        <div class="cmp-top"><span><b>${i+1}. ${it.k}</b></span><span>${it.v.toFixed(3)} h/户·年</span></div>
+        <div class="cmp-bar"><i style="width:${pct}%;background:linear-gradient(90deg,#f59e0b,#fbbf24)"></i></div>
+      </div>`;
+    });
+    document.getElementById("rankBody").innerHTML = h;
+  }
+
+  function renderCompare(){
+    const base = clone(state);
+    const a = compute(base);
+
+    const b1 = clone(state); b1.opts.sectionalizer = false; b1.opts.tie = false;
+    const r1 = compute(b1);
+
+    const b2 = clone(state); b2.opts.sectionalizer = true; b2.opts.tie = false;
+    const r2 = compute(b2);
+
+    const rows = [
+      { name:"现状（无开关）", r:r1, color:"#64748b" },
+      { name:"加装分段开关", r:r2, color:"#38bdf8" },
+      { name:"分段 + 联络转供", r:a, color:"#34d399" }
+    ];
+    const max = Math.max(r1.saidi, r2.saidi, a.saidi, 0.001);
+    let h = '<div class="cmp-grid">';
+    rows.forEach(x=>{
+      h += `<div class="cmp-card">
+        <div class="cn">${x.name}</div>
+        <div class="cv" style="color:${x.color}">${x.r.saidi.toFixed(2)}</div>
+        <div class="cmp-bar"><i style="width:${Math.max(3,x.r.saidi/max*100)}%;background:${x.color}"></i></div>
+        <div class="cd">SAIFI ${x.r.saifi.toFixed(2)} · ASAI ${(x.r.asai*100).toFixed(3)}%</div>
+      </div>`;
+    });
+    h += '</div>';
+    const drop = (1 - a.saidi/(r1.saidi||1)) * 100;
+    h += `<div class="cmp-note">相对无开关方案，当前配置使 SAIDI 下降
+          <b style="color:#34d399">${drop.toFixed(1)}%</b>，ASAI 达到
+          <b style="color:#34d399">${(a.asai*100).toFixed(4)}%</b>，年缺供电量下降至
+          <b style="color:#34d399">${a.ens.toFixed(2)}</b> MWh。</div>`;
+    document.getElementById("cmpBody").innerHTML = h;
+  }
+
+  /* ---------- KPI ---------- */
+  function kpiClass(kind, v){
+    if (kind==="asai") return v>0.999 ? "good" : v>0.998 ? "warn" : "bad";
+    if (kind==="saidi") return v<2 ? "good" : v<6 ? "warn" : "bad";
+    return "";
+  }
+  function renderKPI(res){
+    document.getElementById("vSaifi").innerHTML = res.saifi.toFixed(3) + `<span class="u">次/户·年</span>`;
+    document.getElementById("vSaidi").innerHTML = res.saidi.toFixed(2) + `<span class="u">h/户·年</span>`;
+    document.getElementById("vCaidi").innerHTML = res.caidi.toFixed(2) + `<span class="u">h/次</span>`;
+    document.getElementById("vAsai").innerHTML  = (res.asai*100).toFixed(4) + `<span class="u">%</span>`;
+    document.getElementById("vEns").innerHTML   = res.ens.toFixed(2) + `<span class="u">MWh/年</span>`;
+
+    document.getElementById("bSaifi").style.width = Math.min(100, res.saifi/8*100) + "%";
+    document.getElementById("bSaifi").style.background = "linear-gradient(90deg,#38bdf8,#22d3ee)";
+    document.getElementById("bSaidi").style.width = Math.min(100, res.saidi/20*100) + "%";
+    document.getElementById("bSaidi").style.background = "linear-gradient(90deg,#f59e0b,#fbbf24)";
+    document.getElementById("bCaidi").style.width = Math.min(100, res.caidi/12*100) + "%";
+    document.getElementById("bCaidi").style.background = "linear-gradient(90deg,#818cf8,#a5b4fc)";
+    document.getElementById("bAsai").style.width = Math.min(100, (1-Math.max(0,1-res.asai)*400)*100) + "%";
+    document.getElementById("bAsai").style.background = "linear-gradient(90deg,#34d399,#6ee7b7)";
+    document.getElementById("bEns").style.width = Math.min(100, res.ens/800*100) + "%";
+    document.getElementById("bEns").style.background = "linear-gradient(90deg,#f87171,#fca5a5)";
+
+    document.getElementById("vSaidi").parentElement.className = "kpi " + kpiClass("saidi", res.saidi);
+    document.getElementById("vAsai").parentElement.className = "kpi " + kpiClass("asai", res.asai);
+
+    document.getElementById("tagUsers").textContent = intFmt(res.sumN);
+    document.getElementById("tagLoad").textContent = intFmt(res.sumP);
+  }
+
+  /* ---------- 主渲染 ---------- */
+  function render(){
+    const res = compute(state);
+    renderKPI(res);
+    renderDiagram(res);
+    renderLists(res);
+    renderEditor();
+    renderRank(res);
+    renderCompare();
+    document.getElementById("tgSw").className = "tg" + (state.opts.sectionalizer?" on":"");
+    document.getElementById("tgTie").className = "tg" + (state.opts.tie?" on":"");
+  }
+
+  /* ---------- 交互 ---------- */
+  document.getElementById("tgSw").addEventListener("click", ()=>{
+    state.opts.sectionalizer = !state.opts.sectionalizer; render(); toast("分段开关已" + (state.opts.sectionalizer?"投入":"退出"));
+  });
+  document.getElementById("tgTie").addEventListener("click", ()=>{
+    state.opts.tie = !state.opts.tie; render(); toast("联络转供已" + (state.opts.tie?"投入":"退出"));
+  });
+  document.getElementById("btnReset").addEventListener("click", ()=>{
+    state = clone(DEFAULTS); sel = { kind:"section", idx:0 }; render(); toast("已恢复默认参数");
+  });
+  document.getElementById("btnExport").addEventListener("click", ()=>{
+    const res = compute(state);
+    const lines = [
+      "配电网可靠性评估结果（FMEA）",
+      "生成时间," + new Date().toLocaleString("zh-CN"),
+      "",
+      "指标,数值,单位",
+      "SAIFI," + res.saifi.toFixed(4) + ",次/户·年",
+      "SAIDI," + res.saidi.toFixed(4) + ",h/户·年",
+      "CAIDI," + res.caidi.toFixed(4) + ",h/次",
+      "ASAI," + (res.asai*100).toFixed(5) + ",%",
+      "ENS," + res.ens.toFixed(3) + ",MWh/年",
+      "",
+      "负荷点,用户数,λ(次/年),U(h/年),ENS(MWh/年)",
+      ...res.LPs.map(l => [l.id,l.n,l.lam.toFixed(4),l.U.toFixed(4),l.ens.toFixed(4)].join(","))
+    ];
+    const blob = new Blob(["\ufeff" + lines.join("\n")], { type:"text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "reliability-result.csv";
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast("评估结果已导出 CSV");
+  });
+
+  let toastTimer = null;
+  function toast(msg){
+    const el = document.getElementById("toast");
+    el.textContent = msg; el.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=>el.classList.remove("show"), 1800);
+  }
+
+  function fitStage(){
+    const stage = document.getElementById("stage");
+    const vp = document.getElementById("viewport");
+    stage.style.transform = "none";
+    const h = stage.offsetHeight;
+    const sc = Math.min(1, (window.innerHeight - 12) / h, (window.innerWidth - 6) / 1440);
+    stage.style.transform = "scale(" + sc.toFixed(4) + ")";
+    vp.style.height = Math.round(h * sc) + "px";
+  }
+
+  render();
+  fitStage();
+  window.addEventListener("resize", fitStage);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitStage);
+  setTimeout(fitStage, 120);
+  window.__appReady = true;
+})();
+</script>
+</body>
+</html>
